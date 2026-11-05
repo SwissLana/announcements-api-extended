@@ -1,0 +1,27 @@
+import './src/config.ts';
+import express from 'express';
+import helmet from 'helmet';
+import { pinoHttp } from 'pino-http';
+import logger from './src/logger.ts';
+import { corsMiddleware } from './src/middleware/security.ts';
+import swaggerUi from 'swagger-ui-express';
+import authRoutes from './src/routes/auth.routes.ts';
+import announcementRoutes from './src/routes/announcements.routes.ts';
+import { errorHandler } from './src/middleware/error-handler.ts';
+import { generateOpenApiDocument } from './src/openapi.ts';
+import { swaggerOptions } from './src/swagger-options.ts';
+
+const app = express();
+app.disable('x-powered-by');
+app.use(pinoHttp({ logger, serializers: { req: req => ({ id: req.id, method: req.method, url: req.url?.split('?')[0] }), res: res => ({ statusCode: res.statusCode }) } }));
+app.use(helmet({ contentSecurityPolicy: { directives: { 'upgrade-insecure-requests': null } } }));
+app.use(corsMiddleware);
+app.use(express.json({ limit: '100kb' }));
+app.use('/auth', authRoutes);
+app.use('/announcements', announcementRoutes);
+const document = generateOpenApiDocument();
+app.get('/openapi.json', (_req, res) => res.json(document));
+app.use('/api-docs', swaggerUi.serve, swaggerUi.setup(document, swaggerOptions));
+app.use((_req, res) => { res.status(404).json({ error: 'Not found' }); });
+app.use(errorHandler);
+export default app;
